@@ -43,20 +43,9 @@ public class InjectPrincipalTestCase {
     }
 
     @Test
-    public void testAnonymousPrincipalInjected(BeanWithInjectedPrincipal beanA, BeanWithPrincipalFromEJBContext beanB) {
-        try {
-            Assert.assertEquals(ANONYMOUS_PRINCIPAL, beanA.getPrincipalName());
-            Assert.assertEquals(ANONYMOUS_PRINCIPAL, beanB.getPrincipalName());
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
-    }
-
-    @Test
     public void testNonAnonymousPrincipalInjected(CallerWithIdentity callerWithIdentity) throws Exception {
         try {
-            Assert.assertEquals(NON_ANONYMOUS_PRINCIPAL, callerWithIdentity.getCallerPrincipalInjected());
-            Assert.assertEquals(NON_ANONYMOUS_PRINCIPAL, callerWithIdentity.getCallerPrincipalFromEJBContext());
+            Assert.assertEquals(NON_ANONYMOUS_PRINCIPAL, callerWithIdentity.getPrincipalName()); // is anonymous for legacy but non-anonymous for elytron
         } catch (Exception e) {
             Assert.fail(e.getMessage());
         }

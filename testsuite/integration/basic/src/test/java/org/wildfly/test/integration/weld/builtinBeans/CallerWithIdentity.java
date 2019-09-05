@@ -21,22 +21,17 @@ import javax.inject.Inject;
 
 import org.jboss.ejb3.annotation.RunAsPrincipal;
 
+import java.security.Principal;
+
 @Stateless
 @RunAs("Admin")
 @RunAsPrincipal("non-anonymous")
 public class CallerWithIdentity {
 
     @Inject
-    BeanWithInjectedPrincipal beanA;
+    Principal principal;
 
-    @Inject
-    BeanWithPrincipalFromEJBContext beanB;
-
-    public String getCallerPrincipalInjected() {
-        return beanA.getPrincipalName();
-    }
-
-    public String getCallerPrincipalFromEJBContext() {
-        return beanB.getPrincipalName();
+    public String getPrincipalName() {
+        return principal.getName();
     }
 }

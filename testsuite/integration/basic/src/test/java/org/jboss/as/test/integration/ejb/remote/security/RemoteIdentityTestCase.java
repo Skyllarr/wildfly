@@ -99,12 +99,4 @@ public class RemoteIdentityTestCase {
         assertEquals("user1", targetBean.getPrincipalName("user1", "password1"));
     }
 
-    @Test
-    public void testNotSwitched() throws Exception {
-        final Properties ejbClientConfiguration = EJBUtil.createEjbClientConfiguration(Utils.getHost(mgmtClient));
-        final IntermediateAccess targetBean = EJBUtil.lookupEJB(EntryBean.class, IntermediateAccess.class, ejbClientConfiguration);
-
-        assertEquals("guest", targetBean.getPrincipalName(null, null));
-    }
-
 }

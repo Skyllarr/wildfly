@@ -22,11 +22,15 @@
 
 package org.jboss.as.ejb3.security;
 
+import java.security.PrivilegedAction;
 import java.security.PrivilegedActionException;
 
 import org.jboss.as.ee.component.Component;
 import org.jboss.as.ejb3.component.EJBComponent;
+import org.jboss.as.ejb3.component.stateful.StatefulSessionComponent;
 import org.jboss.as.ejb3.logging.EjbLogger;
+import org.jboss.as.security.remoting.RemoteConnection;
+import org.jboss.as.security.remoting.RemotingContext;
 import org.jboss.invocation.Interceptor;
 import org.jboss.invocation.InterceptorContext;
 import org.wildfly.common.Assert;
@@ -35,16 +39,30 @@ import org.wildfly.security.auth.server.RealmUnavailableException;
 import org.wildfly.security.auth.server.SecurityDomain;
 import org.wildfly.security.auth.server.SecurityIdentity;
 import org.wildfly.security.authz.AuthorizationFailureException;
+import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
  */
 public class RunAsPrincipalInterceptor implements Interceptor {
     public static final String ANONYMOUS_PRINCIPAL = "anonymous";
-    private final String runAsPrincipal;
 
-    public RunAsPrincipalInterceptor(final String runAsPrincipal) {
+    private final String runAsPrincipal;
+    private final boolean securityRequired;
+
+    public RunAsPrincipalInterceptor(final String runAsPrincipal, boolean securityRequired) {
         this.runAsPrincipal = runAsPrincipal;
+        this.securityRequired = securityRequired;
+    }
+
+    private boolean remotingContextIsSet (){
+        RemoteConnection remoteConnection;
+        if(WildFlySecurityManager.isChecking()) {
+            remoteConnection = WildFlySecurityManager.doUnchecked((PrivilegedAction<RemoteConnection>) () -> RemotingContext.getRemoteConnection());
+        } else {
+            remoteConnection = RemotingContext.getRemoteConnection();
+        }
+        return remoteConnection != null;
     }
 
     public Object processInvocation(final InterceptorContext context) throws Exception {
@@ -61,9 +79,15 @@ public class RunAsPrincipalInterceptor implements Interceptor {
         final SecurityIdentity oldIncomingRunAsIdentity = ejbComponent.getIncomingRunAsIdentity();
         SecurityIdentity newIdentity;
         try {
-            // The run-as-principal operation should succeed if the current identity is authorized to
-            // run as a user with the given name or if the caller has sufficient permission
-            if (runAsPrincipal.equals(ANONYMOUS_PRINCIPAL)) {
+            boolean remotingContextIsSet = remotingContextIsSet();
+            boolean isRemoteStatelessSecurityDisabled = !(ejbComponent instanceof StatefulSessionComponent) && remotingContextIsSet && !securityRequired;
+
+            if (runAsPrincipal == null && !isRemoteStatelessSecurityDisabled) {
+                // propagate identity
+                newIdentity = currentIdentity;
+            } else if (runAsPrincipal == null || runAsPrincipal.equals(ANONYMOUS_PRINCIPAL)) {
+                // The run-as-principal operation should succeed if the current identity is authorized to
+                // run as a user with the given name or if the caller has sufficient permission
                 try {
                     newIdentity = currentIdentity.createRunAsAnonymous();
                 } catch (AuthorizationFailureException ex) {
@@ -80,7 +104,8 @@ public class RunAsPrincipalInterceptor implements Interceptor {
                     }
                 }
             }
-            ejbComponent.setIncomingRunAsIdentity(currentIdentity);
+            // do not pass local principal to remote stateless unsecured bean
+            ejbComponent.setIncomingRunAsIdentity(isRemoteStatelessSecurityDisabled ? null : currentIdentity);
             return newIdentity.runAs(context);
         } catch (PrivilegedActionException e) {
             Throwable cause = e.getCause();

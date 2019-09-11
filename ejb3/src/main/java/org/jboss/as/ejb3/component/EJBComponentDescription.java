@@ -1156,22 +1156,19 @@ public abstract class EJBComponentDescription extends ComponentDescription {
         }
 
         // Next interceptor: run-as-principal
-        // Switch users if there's a run-as principal
-        if (runAsPrincipal != null) {
-            interceptorFactories.put(InterceptorOrder.View.RUN_AS_PRINCIPAL, new ImmediateInterceptorFactory(new RunAsPrincipalInterceptor(runAsPrincipal)));
-
+        if (runAsPrincipal == null && !propagateSecurity) {
+            interceptorFactories.put(InterceptorOrder.View.RUN_AS_PRINCIPAL, new ImmediateInterceptorFactory(new RunAsPrincipalInterceptor(RunAsPrincipalInterceptor.ANONYMOUS_PRINCIPAL, false)));
+        } else {
+            // Switch users (set new incoming)
+            interceptorFactories.put(InterceptorOrder.View.RUN_AS_PRINCIPAL, new ImmediateInterceptorFactory(new RunAsPrincipalInterceptor(runAsPrincipal, isSecurityRequired())));
             // Next interceptor: extra principal roles
-            if (securityRoles != null) {
+            if (runAsPrincipal != null && securityRoles != null) {
                 final Set<String> extraRoles = securityRoles.getSecurityRoleNamesByPrincipal(runAsPrincipal);
-                if (! extraRoles.isEmpty()) {
+                if (!extraRoles.isEmpty()) {
                     interceptorFactories.put(InterceptorOrder.View.EXTRA_PRINCIPAL_ROLES, new ImmediateInterceptorFactory(new RoleAddingInterceptor("ejb", RoleMapper.constant(Roles.fromSet(extraRoles)))));
                     roles.addAll(extraRoles);
                 }
             }
-
-        // Next interceptor: prevent identity propagation
-        } else if (! propagateSecurity) {
-            interceptorFactories.put(InterceptorOrder.View.RUN_AS_PRINCIPAL, new ImmediateInterceptorFactory(new RunAsPrincipalInterceptor(RunAsPrincipalInterceptor.ANONYMOUS_PRINCIPAL)));
         }
 
         // Next interceptor: run-as-role

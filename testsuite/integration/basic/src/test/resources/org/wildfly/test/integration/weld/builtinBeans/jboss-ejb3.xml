@@ -25,7 +25,7 @@
         <s:security>
             <ejb-name>*</ejb-name>
             <s:missing-method-permissions-deny-access>false</s:missing-method-permissions-deny-access>
-            <s:run-as-principal>non-anonymous</s:run-as-principal>
+            <!--<s:run-as-principal>non-anonymous</s:run-as-principal>-->
         </s:security>
     </assembly-descriptor>
 </jboss:jboss>

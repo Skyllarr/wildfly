@@ -645,11 +645,8 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
     private SecurityIdentity getCallerSecurityIdentity() {
         if (incomingRunAsIdentity != null) {
             return incomingRunAsIdentity;
-        } else if (securityRequired) {
-            return securityDomain.getCurrentSecurityIdentity();
         } else {
-            // unsecured EJB
-            return securityDomain.getAnonymousSecurityIdentity();
+            return securityDomain.getCurrentSecurityIdentity();
         }
     }
 

@@ -15,14 +15,19 @@
  */
 package org.wildfly.test.integration.weld.builtinBeans;
 
+import org.jboss.ejb3.annotation.RunAsPrincipal;
+
 import java.security.Principal;
 
+import javax.annotation.security.RunAs;
 import javax.enterprise.context.SessionScoped;
 import javax.inject.Inject;
 
 import java.io.Serializable;
 
 @SessionScoped
+@RunAs("Admin")
+@RunAsPrincipal("sec-anonymous")
 public class BeanWithInjectedPrincipal implements Serializable {
 
     @Inject

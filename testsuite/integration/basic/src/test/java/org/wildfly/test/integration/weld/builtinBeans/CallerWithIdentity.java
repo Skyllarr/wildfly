@@ -23,7 +23,7 @@ import org.jboss.ejb3.annotation.RunAsPrincipal;
 
 @Stateless
 @RunAs("Admin")
-@RunAsPrincipal("non-anonymous")
+@RunAsPrincipal("first-anonymous")
 public class CallerWithIdentity {
 
     @Inject

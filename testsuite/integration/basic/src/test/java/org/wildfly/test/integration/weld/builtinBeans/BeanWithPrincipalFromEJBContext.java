@@ -15,6 +15,7 @@
  */
 package org.wildfly.test.integration.weld.builtinBeans;
 
+import javax.annotation.security.RunAs;
 import javax.ejb.Stateless;
 import javax.ejb.EJBContext;
 import javax.annotation.Resource;

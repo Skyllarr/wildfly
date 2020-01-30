@@ -55,6 +55,7 @@ import javax.transaction.UserTransaction;
 import org.jboss.as.core.security.ServerSecurityManager;
 import org.jboss.as.ee.component.BasicComponent;
 import org.jboss.as.ee.component.ComponentView;
+import org.jboss.as.ee.component.interceptors.InvocationType;
 import org.jboss.as.ejb3.component.allowedmethods.AllowedMethodsInformation;
 import org.jboss.as.ejb3.component.interceptors.ShutDownInterceptorFactory;
 import org.jboss.as.ejb3.component.invocationmetrics.InvocationMetrics;
@@ -643,13 +644,17 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
     }
 
     private SecurityIdentity getCallerSecurityIdentity() {
-        if (incomingRunAsIdentity != null) {
-            return incomingRunAsIdentity;
-        } else if (securityRequired) {
-            return securityDomain.getCurrentSecurityIdentity();
+        if (CurrentInvocationContext.get().getPrivateData(InvocationType.class) != null && !CurrentInvocationContext.get().getPrivateData(InvocationType.class).equals(InvocationType.REMOTE)) {
+            return (incomingRunAsIdentity == null) ? securityDomain.getCurrentSecurityIdentity() : incomingRunAsIdentity;
         } else {
-            // unsecured EJB
-            return securityDomain.getAnonymousSecurityIdentity();
+            if (incomingRunAsIdentity != null) {
+                return incomingRunAsIdentity;
+            } else if (securityRequired) {
+                return securityDomain.getCurrentSecurityIdentity();
+            } else {
+                // unsecured EJB
+                return securityDomain.getAnonymousSecurityIdentity();
+            }
         }
     }
 

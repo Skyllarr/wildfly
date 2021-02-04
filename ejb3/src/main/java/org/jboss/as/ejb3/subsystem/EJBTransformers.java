@@ -35,6 +35,7 @@ import static org.jboss.as.ejb3.subsystem.EJB3Model.VERSION_4_0_0;
 import static org.jboss.as.ejb3.subsystem.EJB3Model.VERSION_5_0_0;
 import static org.jboss.as.ejb3.subsystem.EJB3Model.VERSION_6_0_0;
 import static org.jboss.as.ejb3.subsystem.EJB3Model.VERSION_7_0_0;
+import static org.jboss.as.ejb3.subsystem.EJB3Model.VERSION_8_0_0;
 import static org.jboss.as.ejb3.subsystem.EJB3SubsystemModel.ALLOW_EXECUTION;
 import static org.jboss.as.ejb3.subsystem.EJB3SubsystemModel.CLIENT_MAPPINGS_CLUSTER_NAME;
 import static org.jboss.as.ejb3.subsystem.EJB3SubsystemModel.CONNECTORS;
@@ -94,7 +95,8 @@ public class EJBTransformers implements ExtensionTransformerRegistration {
         ModelVersion currentModel = subsystemRegistration.getCurrentSubsystemVersion();
         ChainedTransformationDescriptionBuilder chainedBuilder = TransformationDescriptionBuilder.Factory.createChainedSubystemInstance(currentModel);
 
-        registerTransformers_7_0_0(chainedBuilder.createBuilder(currentModel, VERSION_7_0_0.getVersion()));
+        registerTransformers_8_0_0(chainedBuilder.createBuilder(currentModel, VERSION_8_0_0.getVersion()));
+        registerTransformers_7_0_0(chainedBuilder.createBuilder(VERSION_8_0_0.getVersion(), VERSION_7_0_0.getVersion()));
         registerTransformers_6_0_0(chainedBuilder.createBuilder(VERSION_7_0_0.getVersion(), VERSION_6_0_0.getVersion()));
         registerTransformers_5_0_0(chainedBuilder.createBuilder(VERSION_6_0_0.getVersion(), VERSION_5_0_0.getVersion()));
         registerTransformers_4_0_0(chainedBuilder.createBuilder(VERSION_5_0_0.getVersion(), VERSION_4_0_0.getVersion()));
@@ -103,7 +105,7 @@ public class EJBTransformers implements ExtensionTransformerRegistration {
         registerTransformers_1_2_1(chainedBuilder.createBuilder(VERSION_1_3_0.getVersion(), VERSION_1_2_1.getVersion()));
 
         chainedBuilder.buildAndRegister(subsystemRegistration, new ModelVersion[] {
-                VERSION_7_0_0.getVersion(), VERSION_6_0_0.getVersion(), VERSION_5_0_0.getVersion(),
+                VERSION_8_0_0.getVersion(), VERSION_7_0_0.getVersion(), VERSION_6_0_0.getVersion(), VERSION_5_0_0.getVersion(),
                 VERSION_4_0_0.getVersion(), VERSION_3_0_0.getVersion(), VERSION_1_3_0.getVersion(), VERSION_1_2_1.getVersion()});
     }
 

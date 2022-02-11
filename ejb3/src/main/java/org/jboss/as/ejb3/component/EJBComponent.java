@@ -282,10 +282,12 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
     public Principal getCallerPrincipal() {
         if (isSecurityDomainKnown()) {
             return getCallerSecurityIdentity().getPrincipal();
-        } else if (WildFlySecurityManager.isChecking()) {
-            return WildFlySecurityManager.doUnchecked(getCaller);
-        } else if (this.serverSecurityManager != null){
-            return this.serverSecurityManager.getCallerPrincipal();
+        } else if (this.serverSecurityManager != null) {
+            if (WildFlySecurityManager.isChecking()) {
+                return WildFlySecurityManager.doUnchecked(getCaller);
+            } else {
+                return this.serverSecurityManager.getCallerPrincipal();
+            }
         } else {
             return new AnonymousPrincipal();
         }

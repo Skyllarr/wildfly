@@ -28,21 +28,21 @@
 
     <security-constraint>
         <web-resource-collection>
-            <web-resource-name>*</web-resource-name>
-            <url-pattern>*</url-pattern>
+            <url-pattern>/*</url-pattern>
         </web-resource-collection>
         <auth-constraint>
-            <role-name>RoleName</role-name>
+            <role-name>User</role-name>
+            <role-name>Admin</role-name>
         </auth-constraint>
     </security-constraint>
 
     <security-role>
-        <role-name>RoleName</role-name>
+        <role-name>abc</role-name>
     </security-role>
 
     <login-config>
-        <auth-method>BASIC</auth-method>
-        <realm-name>My Application</realm-name>
+        <auth-method>DIGEST</auth-method>
+        <realm-name>ApplicationRealm</realm-name>
     </login-config>
 
 

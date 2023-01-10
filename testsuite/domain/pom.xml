@@ -279,6 +279,12 @@
             <groupId>xom</groupId>
             <artifactId>xom</artifactId>
         </dependency>
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.11</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

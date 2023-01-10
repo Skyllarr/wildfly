@@ -1,5 +1,20 @@
 package org.jboss.as.test.integration.domain.suites;
 
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.http.Header;
+import org.apache.http.HeaderElement;
+import org.apache.http.HttpHost;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.AuthenticationException;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.AuthCache;
+import org.apache.http.client.CookieStore;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.impl.auth.DigestScheme;
+import org.apache.http.impl.client.*;
 import org.jboss.as.controller.client.Operation;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
@@ -9,16 +24,23 @@ import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
+import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.COMPOSITE;
@@ -99,6 +121,7 @@ public class DigestDomainTestCase {
         webArchive.addAsWebResource(index, "index.html");
         webArchive.addAsWebInfResource("domain-digest/web.xml", "web.xml");
         webArchive.addAsWebInfResource("domain-digest/jboss-web.xml", "jboss-web.xml");
+        webArchive.addAsWebInfResource("domain-digest/beans.xml", "beans.xml");
 
 //        webArchive2 = ShrinkWrap.create(WebArchive.class, TEST);
 //        index = tccl.getResource("helloWorld/index.html");
@@ -126,8 +149,9 @@ public class DigestDomainTestCase {
         ModelNode composite = createDeploymentOperation(content, MAIN_SERVER_GROUP_DEPLOYMENT_ADDRESS, OTHER_SERVER_GROUP_DEPLOYMENT_ADDRESS);
         executeOnMaster(composite);
 
-        performHttpCall(DomainTestSupport.masterAddress, 8080);
-        performHttpCall(DomainTestSupport.slaveAddress, 8630);
+        getUsernameTokenPasswordDigest();
+//        performHttpCall(DomainTestSupport.masterAddress, 8080);
+//        performHttpCall(DomainTestSupport.slaveAddress, 8630);
     }
 
     private static ModelNode createDeploymentOperation(ModelNode content, ModelNode... serverGroupAddressses) {
@@ -189,4 +213,65 @@ public class DigestDomainTestCase {
     private static ModelNode executeOnMaster(ModelNode op) throws IOException {
         return validateResponse(testSupport.getDomainMasterLifecycleUtil().getDomainClient().execute(op));
     }
+
+    /**
+     * Get UsernameToken profile digest
+     *
+     * @return Password_Digest = Base64 ( SHA-1 ( nonce + created + password ) ) - toto je WS-Security
+     */
+    private void getUsernameTokenPasswordDigest() throws IOException, AuthenticationException, NoSuchAlgorithmException, URISyntaxException {
+        CloseableHttpClient httpclient2 = HttpClients.createDefault();
+        HttpGet httpGet = new HttpGet("http://localhost:8080/test/");
+        CloseableHttpResponse response = httpclient2.execute(httpGet);
+        Map<String, String> wwwAuth = Arrays
+                .stream(response.getHeaders("WWW-Authenticate")[0]
+                        .getElements())
+                .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
+        // the first call ALWAYS fails with a 401
+        Assert.assertEquals(response.getStatusLine().getStatusCode(), 401);
+
+        String realm = wwwAuth.get("Digest realm");
+        String nonce = wwwAuth.get("nonce");
+        String uri = "/test/";
+
+        String responseDigest = computeDigest("/test/", nonce, "", "", "myUser", "myPassword", "MD5", realm, "", "GET");
+
+        // create response with headers
+        HttpGet response2 = new HttpGet("http://localhost:8080/test/");
+        response2.setHeader("Authorization", "Digest " +
+                "username=" + "\"myUser\",\n" +
+                "realm=\"" + realm + "\",\n" +
+                "nonce=\"" + nonce +"\",\n" +
+                "uri=\"" + uri +"\",\n" +
+                "algorithm=\"" + "MD5" +"\",\n" +
+                "response=\"" + responseDigest +
+                "\"");
+
+
+        response2.setURI(new URI("http://localhost:8630/test/"));
+        CloseableHttpResponse chc2 = httpclient2.execute(response2);
+        Assert.assertEquals(chc2.getStatusLine().getStatusCode(), 401);
+
+        response2.setURI(new URI("http://localhost:8080/test/"));
+        CloseableHttpResponse chc = httpclient2.execute(response2);
+        Assert.assertEquals(chc.getStatusLine().getStatusCode(), 200);
+    }
+
+    private String computeDigest(String uri, String nonce, String cnonce, String nc, String username, String password, String algorithm, String realm, String qop, String method) throws NoSuchAlgorithmException, NoSuchAlgorithmException {
+        String A1, HashA1, A2, HashA2;
+        MessageDigest md = MessageDigest.getInstance(algorithm);
+        A1 = username + ":" + realm + ":" + password;
+        HashA1 = getMD5(A1);
+        A2 = method + ":" + uri;
+        HashA2 = getMD5(A2);
+        String combo, finalHash;
+        combo = HashA1 + ":" + nonce + ":" + HashA2;
+        finalHash = DigestUtils.md5Hex(combo);
+        return finalHash;
+    }
+
+    public String getMD5(String value) {
+        return DigestUtils.md5Hex(value).toString();
+    }
+
 }

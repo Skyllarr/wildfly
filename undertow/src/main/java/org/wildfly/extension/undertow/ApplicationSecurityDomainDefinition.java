@@ -30,6 +30,8 @@ import static org.wildfly.extension.undertow.Capabilities.REF_SECURITY_DOMAIN;
 import static org.wildfly.security.http.HttpConstants.BASIC_NAME;
 import static org.wildfly.security.http.HttpConstants.CLIENT_CERT_NAME;
 import static org.wildfly.security.http.HttpConstants.DIGEST_NAME;
+import static org.wildfly.security.http.HttpConstants.DIGEST_SHA256_NAME;
+import static org.wildfly.security.http.HttpConstants.DIGEST_SHA512_256_NAME;
 import static org.wildfly.security.http.HttpConstants.FORM_NAME;
 
 import java.security.PrivilegedAction;
@@ -129,6 +131,8 @@ public class ApplicationSecurityDomainDefinition extends PersistentResourceDefin
         defaultMechanisms.add(BASIC_NAME);
         defaultMechanisms.add(CLIENT_CERT_NAME);
         defaultMechanisms.add(DIGEST_NAME);
+        defaultMechanisms.add(DIGEST_SHA256_NAME);
+        defaultMechanisms.add(DIGEST_SHA512_256_NAME);
         defaultMechanisms.add(FORM_NAME);
 
         SERVLET_MECHANISM = defaultMechanisms::contains;

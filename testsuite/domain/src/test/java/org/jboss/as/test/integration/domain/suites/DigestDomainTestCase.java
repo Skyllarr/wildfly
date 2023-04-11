@@ -1,22 +1,11 @@
 package org.jboss.as.test.integration.domain.suites;
 
 import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.http.Header;
 import org.apache.http.HeaderElement;
-import org.apache.http.HttpHost;
-import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.AuthenticationException;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.AuthCache;
-import org.apache.http.client.CookieStore;
-import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.protocol.HttpClientContext;
-import org.apache.http.impl.auth.DigestScheme;
 import org.apache.http.impl.client.*;
-import org.jboss.as.controller.client.Operation;
-import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.dmr.ModelNode;
@@ -33,12 +22,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -62,7 +48,6 @@ public class DigestDomainTestCase {
     private static WebArchive webArchive;
     private static File tmpDir;
     private static final String TEST = "test.war";
-
 
     public static final String SERVER_GROUP = "server-group";
     private static final String REPLACEMENT = "test.war.v2";
@@ -112,25 +97,14 @@ public class DigestDomainTestCase {
 
     }
     @BeforeClass
-    public static void setupDomain() throws Exception {
+    public static void setupDomain() {
 
-        // Create our deployments
+        // Create a deployment
         webArchive = ShrinkWrap.create(WebArchive.class, TEST);
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        URL index = tccl.getResource("helloWorld/index.html");
-        webArchive.addAsWebResource(index, "index.html");
+        webArchive.addAsWebResource(tccl.getResource("helloWorld/index.html"), "index.html");
         webArchive.addAsWebInfResource("domain-digest/web.xml", "web.xml");
-        webArchive.addAsWebInfResource("domain-digest/jboss-web.xml", "jboss-web.xml");
-        webArchive.addAsWebInfResource("domain-digest/beans.xml", "beans.xml");
 
-//        webArchive2 = ShrinkWrap.create(WebArchive.class, TEST);
-//        index = tccl.getResource("helloWorld/index.html");
-//        webArchive2.addAsWebResource(index, "index.html");
-//        index = tccl.getResource("helloWorld/index2.html");
-//        webArchive2.addAsWebResource(index, "index2.html");
-//        webArchive2.addAsWebInfResource("domain-digest/web.xml", "WEB-INF/web.xml");
-
-        // Make versions on the filesystem for URL-based deploy and for unmanaged content testing
         tmpDir = new File("target/deployments/" + DeploymentManagementTestCase.class.getSimpleName());
         new File(tmpDir, "archives").mkdirs();
         new File(tmpDir, "exploded").mkdirs();
@@ -149,9 +123,7 @@ public class DigestDomainTestCase {
         ModelNode composite = createDeploymentOperation(content, MAIN_SERVER_GROUP_DEPLOYMENT_ADDRESS, OTHER_SERVER_GROUP_DEPLOYMENT_ADDRESS);
         executeOnMaster(composite);
 
-        getUsernameTokenPasswordDigest();
-//        performHttpCall(DomainTestSupport.masterAddress, 8080);
-//        performHttpCall(DomainTestSupport.slaveAddress, 8630);
+        testDigestAuthenticationForTwoServers();
     }
 
     private static ModelNode createDeploymentOperation(ModelNode content, ModelNode... serverGroupAddressses) {
@@ -168,8 +140,6 @@ public class DigestDomainTestCase {
 
         return composite;
     }
-
-
 
     private static ModelNode getEmptyOperation(String operationName, ModelNode address) {
         ModelNode op = new ModelNode();
@@ -219,7 +189,7 @@ public class DigestDomainTestCase {
      *
      * @return Password_Digest = Base64 ( SHA-1 ( nonce + created + password ) ) - toto je WS-Security
      */
-    private void getUsernameTokenPasswordDigest() throws IOException, AuthenticationException, NoSuchAlgorithmException, URISyntaxException {
+    private void testDigestAuthenticationForTwoServers() throws IOException, AuthenticationException, NoSuchAlgorithmException, URISyntaxException {
         CloseableHttpClient httpclient2 = HttpClients.createDefault();
         HttpGet httpGet = new HttpGet("http://localhost:8080/test/");
         CloseableHttpResponse response = httpclient2.execute(httpGet);
@@ -227,7 +197,7 @@ public class DigestDomainTestCase {
                 .stream(response.getHeaders("WWW-Authenticate")[0]
                         .getElements())
                 .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
-        // the first call ALWAYS fails with a 401
+        // the first call always fails with a 401 with a provided nonce, realm, etc.
         Assert.assertEquals(response.getStatusLine().getStatusCode(), 401);
 
         String realm = wwwAuth.get("Digest realm");
@@ -248,10 +218,12 @@ public class DigestDomainTestCase {
                 "\"");
 
 
+        // try to send a response to the server that did not send a challenge which will result in 401
         response2.setURI(new URI("http://localhost:8630/test/"));
         CloseableHttpResponse chc2 = httpclient2.execute(response2);
         Assert.assertEquals(chc2.getStatusLine().getStatusCode(), 401);
 
+        // try to send a response to the server that not send a challenge which will result in 200
         response2.setURI(new URI("http://localhost:8080/test/"));
         CloseableHttpResponse chc = httpclient2.execute(response2);
         Assert.assertEquals(chc.getStatusLine().getStatusCode(), 200);

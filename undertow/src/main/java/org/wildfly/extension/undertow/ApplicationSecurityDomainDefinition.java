@@ -483,7 +483,7 @@ public class ApplicationSecurityDomainDefinition extends PersistentResourceDefin
                     ? this.httpAuthenticationFactory
                     : toHttpAuthenticationFactory(securityDomain, getRealmName(deploymentInfo));
             AuthenticationManager.Builder builder = AuthenticationManager.builder()
-                    .setHttpAuthenticationFactory(httpAuthenticationFactory)
+                    .setHttpAuthenticationFactory(httpAuthenticationFactory) // tu je spatne sessionDigest false aasi
                     .setOverrideDeploymentConfig(overrideDeploymentConfig)
                     .setHttpAuthenticationFactoryTransformer(singleSignOnTransformerSupplier.get())
                     .setIdentityCacheSupplier(identityCacheSupplier)

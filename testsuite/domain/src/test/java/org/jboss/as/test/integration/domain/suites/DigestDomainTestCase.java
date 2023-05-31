@@ -2,8 +2,9 @@ package org.jboss.as.test.integration.domain.suites;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.http.HeaderElement;
+import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthenticationException;
-import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.*;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
@@ -38,9 +39,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STE
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DEPLOYMENT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER;
-import static org.jboss.as.test.integration.domain.management.util.DomainTestSupport.safeClose;
 import static org.jboss.as.test.integration.domain.management.util.DomainTestSupport.validateResponse;
-import static org.junit.Assert.assertTrue;
 
 public class DigestDomainTestCase {
 
@@ -96,34 +95,40 @@ public class DigestDomainTestCase {
         OTHER_RUNNING_SERVER_GROUP_ADDRESS.protect();
 
     }
-    @BeforeClass
-    public static void setupDomain() {
 
-        // Create a deployment
+    @BeforeClass
+    public static void setupDomainAndDeployWebApp() throws Exception {
+
         webArchive = ShrinkWrap.create(WebArchive.class, TEST);
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        webArchive.addAsWebResource(tccl.getResource("helloWorld/index.html"), "index.html");
-        webArchive.addAsWebInfResource("domain-digest/web.xml", "web.xml");
+        webArchive.addAsWebResource(Thread.currentThread().getContextClassLoader().getResource("helloWorld/index.html"), "index.html");
+        webArchive.addAsWebInfResource("domain-session-digest/web.xml", "web.xml");
 
         tmpDir = new File("target/deployments/" + DeploymentManagementTestCase.class.getSimpleName());
         new File(tmpDir, "archives").mkdirs();
-        new File(tmpDir, "exploded").mkdirs();
+//        new File(tmpDir, "exploded").mkdirs();
         webArchive.as(ZipExporter.class).exportTo(new File(tmpDir, "archives/" + TEST), true);
-        webArchive.as(ExplodedExporter.class).exportExploded(new File(tmpDir, "exploded"));
+//        webArchive.as(ExplodedExporter.class).exportExploded(new File(tmpDir, "exploded"));
 
-        // Launch the domain
-        testSupport = DomainTestSuite.createSupport(DeploymentManagementTestCase.class.getSimpleName());
+        final DomainTestSupport.Configuration configuration;
+        configuration = DomainTestSupport.Configuration.create(DeploymentManagementTestCase.class.getSimpleName(),
+                "domain-configs/domain-session-digest.xml", "host-configs/host-primary.xml", "host-configs/host-secondary.xml");
+        testSupport = DomainTestSupport.create(configuration);
+        testSupport.start();
+
+        deployWebApplicationToDomain();
     }
 
     @Test
-    public void testDeploymentViaUrl() throws Exception {
+    public void testHttpSessionDigestProperty() throws Exception {
+        testDigestAuthenticationForTwoServers();
+    }
+
+    private static void deployWebApplicationToDomain() throws IOException {
         String url = new File(tmpDir, "archives/" + TEST).toURI().toURL().toString();
         ModelNode content = new ModelNode();
         content.get("url").set(url);
         ModelNode composite = createDeploymentOperation(content, MAIN_SERVER_GROUP_DEPLOYMENT_ADDRESS, OTHER_SERVER_GROUP_DEPLOYMENT_ADDRESS);
         executeOnMaster(composite);
-
-        testDigestAuthenticationForTwoServers();
     }
 
     private static ModelNode createDeploymentOperation(ModelNode content, ModelNode... serverGroupAddressses) {
@@ -146,53 +151,21 @@ public class DigestDomainTestCase {
         op.get(OP).set(operationName);
         if (address != null) {
             op.get(OP_ADDR).set(address);
-        }
-        else {
+        } else {
             // Just establish the standard structure; caller can fill in address later
             op.get(OP_ADDR);
         }
         return op;
     }
 
-    private static void performHttpCall(String host, int port) throws IOException {
-        performHttpCall(host, port, "test");
-    }
-
-    private static void performHttpCall(String host, int port, String context) throws IOException {
-        URLConnection conn = null;
-        InputStream in = null;
-        StringWriter writer = new StringWriter();
-        try {
-            URL url = new URL("http://" + TestSuiteEnvironment.formatPossibleIpv6Address(host) + ":" + port + "/" + context + "/index.html");
-            conn = url.openConnection();
-            conn.setDoInput(true);
-            in = new BufferedInputStream(conn.getInputStream());
-            int i = in.read();
-            while (i != -1) {
-                writer.write((char) i);
-                i = in.read();
-            }
-            assertTrue(writer.toString().indexOf("Hello World") > -1);
-        } finally {
-            safeClose(in);
-            safeClose(writer);
-        }
-    }
-
-
     private static ModelNode executeOnMaster(ModelNode op) throws IOException {
-        return validateResponse(testSupport.getDomainMasterLifecycleUtil().getDomainClient().execute(op));
+        return validateResponse(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient().execute(op));
     }
 
-    /**
-     * Get UsernameToken profile digest
-     *
-     * @return Password_Digest = Base64 ( SHA-1 ( nonce + created + password ) ) - toto je WS-Security
-     */
-    private void testDigestAuthenticationForTwoServers() throws IOException, AuthenticationException, NoSuchAlgorithmException, URISyntaxException {
-        CloseableHttpClient httpclient2 = HttpClients.createDefault();
+    private void testDigestAuthenticationForTwoServers() throws IOException, NoSuchAlgorithmException, URISyntaxException {
+        HttpClient httpclient2 = HttpClients.createDefault();
         HttpGet httpGet = new HttpGet("http://localhost:8080/test/");
-        CloseableHttpResponse response = httpclient2.execute(httpGet);
+        HttpResponse response = httpclient2.execute(httpGet);
         Map<String, String> wwwAuth = Arrays
                 .stream(response.getHeaders("WWW-Authenticate")[0]
                         .getElements())
@@ -211,22 +184,47 @@ public class DigestDomainTestCase {
         response2.setHeader("Authorization", "Digest " +
                 "username=" + "\"myUser\",\n" +
                 "realm=\"" + realm + "\",\n" +
-                "nonce=\"" + nonce +"\",\n" +
-                "uri=\"" + uri +"\",\n" +
-                "algorithm=\"" + "MD5" +"\",\n" +
+                "nonce=\"" + nonce + "\",\n" +
+                "uri=\"" + uri + "\",\n" +
+                "algorithm=\"" + "MD5" + "\",\n" +
                 "response=\"" + responseDigest +
                 "\"");
 
-
-        // try to send a response to the server that did not send a challenge which will result in 401
+        // try to send a response to the server that did not send a challenge which will result in 401 if nonce manager not persisted
         response2.setURI(new URI("http://localhost:8630/test/"));
-        CloseableHttpResponse chc2 = httpclient2.execute(response2);
-        Assert.assertEquals(chc2.getStatusLine().getStatusCode(), 401);
+        HttpResponse chc2 = httpclient2.execute(response2);
+        Assert.assertEquals(200, chc2.getStatusLine().getStatusCode()); // passes on the other server
+        response2.releaseConnection();
 
         // try to send a response to the server that not send a challenge which will result in 200
         response2.setURI(new URI("http://localhost:8080/test/"));
-        CloseableHttpResponse chc = httpclient2.execute(response2);
-        Assert.assertEquals(chc.getStatusLine().getStatusCode(), 200);
+        HttpResponse chc = httpclient2.execute(response2);
+        Assert.assertEquals(401, chc.getStatusLine().getStatusCode()); // 401 is returned because the same nonce cannot be used twice
+        // take the nonce from the 401 and send it to server 1
+        Map<String, String> wwwAuth2 = Arrays
+                .stream(chc.getHeaders("WWW-Authenticate")[0]
+                        .getElements())
+                .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
+        realm = wwwAuth2.get("Digest realm");
+        nonce = wwwAuth2.get("nonce");
+        uri = "/test/";
+        String responseDigest3 = computeDigest("/test/", nonce, "", "", "myUser", "myPassword", "MD5", realm, "", "GET");
+
+        response2.releaseConnection();
+        HttpGet response3 = new HttpGet("http://localhost:8630/test/");
+        response3.setHeader("Authorization", "Digest " +
+                "username=" + "\"myUser\",\n" +
+                "realm=\"" + realm + "\",\n" +
+                "nonce=\"" + nonce + "\",\n" +
+                "uri=\"" + uri + "\",\n" +
+                "algorithm=\"" + "MD5" + "\",\n" +
+                "response=\"" + responseDigest3 +
+                "\"");
+
+        response3.setURI(new URI("http://localhost:8630/test/"));
+        HttpResponse chc3 = httpclient2.execute(response3);
+        Assert.assertEquals(200, chc3.getStatusLine().getStatusCode()); // passes on the other server
+        response3.releaseConnection();
     }
 
     private String computeDigest(String uri, String nonce, String cnonce, String nc, String username, String password, String algorithm, String realm, String qop, String method) throws NoSuchAlgorithmException, NoSuchAlgorithmException {

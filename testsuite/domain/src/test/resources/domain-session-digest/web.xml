@@ -44,6 +44,5 @@
         <auth-method>DIGEST</auth-method>
         <realm-name>ApplicationRealm</realm-name>
     </login-config>
-
-
+    <distributable/>
 </web-app>

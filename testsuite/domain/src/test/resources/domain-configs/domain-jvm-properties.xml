@@ -22,7 +22,7 @@
 
 <domain xmlns="urn:jboss:domain:18.0">
 
-    <extensions>a
+    <extensions>
         <extension module="org.jboss.as.clustering.infinispan"/>
         <extension module="org.jboss.as.clustering.jgroups"/>
         <extension module="org.jboss.as.connector"/>

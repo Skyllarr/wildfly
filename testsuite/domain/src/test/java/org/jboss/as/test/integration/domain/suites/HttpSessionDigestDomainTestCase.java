@@ -3,26 +3,22 @@ package org.jboss.as.test.integration.domain.suites;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.http.HeaderElement;
 import org.apache.http.HttpResponse;
-import org.apache.http.auth.AuthenticationException;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.*;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
-import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -41,10 +37,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOS
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER;
 import static org.jboss.as.test.integration.domain.management.util.DomainTestSupport.validateResponse;
 
-public class DigestDomainTestCase {
+public class HttpSessionDigestDomainTestCase {
 
     private static DomainTestSupport testSupport;
-    private static WebArchive webArchive;
     private static File tmpDir;
     private static final String TEST = "test.war";
 
@@ -86,10 +81,10 @@ public class DigestDomainTestCase {
         MAIN_RUNNING_SERVER_DEPLOYMENT_ADDRESS.add(SERVER, "main-one");
         MAIN_RUNNING_SERVER_DEPLOYMENT_ADDRESS.add(DEPLOYMENT, TEST);
         MAIN_RUNNING_SERVER_DEPLOYMENT_ADDRESS.protect();
-        OTHER_RUNNING_SERVER_ADDRESS.add(HOST, "slave");
+        OTHER_RUNNING_SERVER_ADDRESS.add(HOST, "primary");
         OTHER_RUNNING_SERVER_ADDRESS.add(SERVER, "other-two");
         OTHER_RUNNING_SERVER_ADDRESS.protect();
-        OTHER_RUNNING_SERVER_GROUP_ADDRESS.add(HOST, "slave");
+        OTHER_RUNNING_SERVER_GROUP_ADDRESS.add(HOST, "primary");
         OTHER_RUNNING_SERVER_GROUP_ADDRESS.add(SERVER, "other-two");
         OTHER_RUNNING_SERVER_GROUP_ADDRESS.add(DEPLOYMENT, TEST);
         OTHER_RUNNING_SERVER_GROUP_ADDRESS.protect();
@@ -99,15 +94,13 @@ public class DigestDomainTestCase {
     @BeforeClass
     public static void setupDomainAndDeployWebApp() throws Exception {
 
-        webArchive = ShrinkWrap.create(WebArchive.class, TEST);
+        WebArchive webArchive = ShrinkWrap.create(WebArchive.class, TEST);
         webArchive.addAsWebResource(Thread.currentThread().getContextClassLoader().getResource("helloWorld/index.html"), "index.html");
         webArchive.addAsWebInfResource("domain-session-digest/web.xml", "web.xml");
 
         tmpDir = new File("target/deployments/" + DeploymentManagementTestCase.class.getSimpleName());
         new File(tmpDir, "archives").mkdirs();
-//        new File(tmpDir, "exploded").mkdirs();
         webArchive.as(ZipExporter.class).exportTo(new File(tmpDir, "archives/" + TEST), true);
-//        webArchive.as(ExplodedExporter.class).exportExploded(new File(tmpDir, "exploded"));
 
         final DomainTestSupport.Configuration configuration;
         configuration = DomainTestSupport.Configuration.create(DeploymentManagementTestCase.class.getSimpleName(),
@@ -119,8 +112,85 @@ public class DigestDomainTestCase {
     }
 
     @Test
-    public void testHttpSessionDigestProperty() throws Exception {
+    public void testHttpSessionDigestPropertyWithTwoServers() throws Exception {
         testDigestAuthenticationForTwoServers();
+    }
+
+    @Test
+    public void testHttpSessionDigestSameNonceCannotBeUsedTwice() throws Exception {
+        String server1 = "http://localhost:8080/test/";
+        String server2 = "http://localhost:8630/test/";
+
+        try (CloseableHttpClient httpclient = HttpClients.createDefault()) {
+            HttpGet httpFirstGetRequest = new HttpGet(server1);
+            HttpResponse response = httpclient.execute(httpFirstGetRequest);
+            Map<String, String> wwwAuth = Arrays.stream(response.getHeaders("WWW-Authenticate")[0].getElements())
+                    .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
+            String realm = wwwAuth.get("Digest realm");
+            String nonce = wwwAuth.get("nonce");
+            String uri = "/test/";
+
+            // the first call always fails with a 401 and a requested nonce, realm, etc.
+            Assert.assertEquals(response.getStatusLine().getStatusCode(), 401);
+            httpFirstGetRequest.releaseConnection();
+
+            // create response with headers
+            HttpGet request = new HttpGet(server1);
+            addAuthenticateHeader(request, realm, nonce, uri);
+
+            // send a response to the server2 which did not send a challenge
+            // the result is 200 because the nonce manager was configured to be persisted with "org.wildfly.security.http.session-digest" option
+            request.setURI(new URI(server2));
+            Assert.assertEquals(200, httpclient.execute(request).getStatusLine().getStatusCode());
+            request.releaseConnection();
+
+            // try to send a same response to the server1 that have sent a challenge
+            // 401 is returned because the same nonce cannot be used twice
+            request.setURI(new URI(server1));
+            response = httpclient.execute(request);
+            Assert.assertEquals(401, response.getStatusLine().getStatusCode());
+            request.releaseConnection();
+        }
+    }
+
+    private void testDigestAuthenticationForTwoServers() throws IOException, NoSuchAlgorithmException, URISyntaxException {
+        String server1 = "http://localhost:8080/test/";
+        String server2 = "http://localhost:8630/test/";
+
+        try (CloseableHttpClient httpclient = HttpClients.createDefault()) {
+            HttpGet httpFirstGetRequest = new HttpGet(server1);
+            HttpResponse response = httpclient.execute(httpFirstGetRequest);
+            Map<String, String> wwwAuth = Arrays.stream(response.getHeaders("WWW-Authenticate")[0].getElements())
+                    .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
+            String realm = wwwAuth.get("Digest realm");
+            String nonce = wwwAuth.get("nonce");
+            String uri = "/test/";
+
+            // the first call always fails with a 401 and a requested nonce, realm, etc.
+            Assert.assertEquals(response.getStatusLine().getStatusCode(), 401);
+            httpFirstGetRequest.releaseConnection();
+
+            // create response with headers
+            HttpGet request = new HttpGet(server1);
+            addAuthenticateHeader(request, realm, nonce, uri);
+
+            // send a response to the server2 which did not send a challenge
+            // the result is 200 because the nonce manager was configured to be persisted with "org.wildfly.security.http.session-digest" option
+            request.setURI(new URI(server2));
+            Assert.assertEquals(200, httpclient.execute(request).getStatusLine().getStatusCode());
+            request.releaseConnection();
+        }
+    }
+
+    private void addAuthenticateHeader(HttpGet httpGetRequestWithAuthHeader, String realm, String nonce, String uri) throws NoSuchAlgorithmException {
+        httpGetRequestWithAuthHeader.setHeader("Authorization", "Digest " +
+                "username=" + "\"myUser\",\n" +
+                "realm=\"" + realm + "\",\n" +
+                "nonce=\"" + nonce + "\",\n" +
+                "uri=\"" + uri + "\",\n" +
+                "algorithm=\"" + "MD5" + "\",\n" +
+                "response=\"" + computeDigest("/test/", nonce, "myUser", "myPassword", "MD5", realm, "GET") +
+                "\"");
     }
 
     private static void deployWebApplicationToDomain() throws IOException {
@@ -162,72 +232,7 @@ public class DigestDomainTestCase {
         return validateResponse(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient().execute(op));
     }
 
-    private void testDigestAuthenticationForTwoServers() throws IOException, NoSuchAlgorithmException, URISyntaxException {
-        HttpClient httpclient2 = HttpClients.createDefault();
-        HttpGet httpGet = new HttpGet("http://localhost:8080/test/");
-        HttpResponse response = httpclient2.execute(httpGet);
-        Map<String, String> wwwAuth = Arrays
-                .stream(response.getHeaders("WWW-Authenticate")[0]
-                        .getElements())
-                .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
-        // the first call always fails with a 401 with a provided nonce, realm, etc.
-        Assert.assertEquals(response.getStatusLine().getStatusCode(), 401);
-
-        String realm = wwwAuth.get("Digest realm");
-        String nonce = wwwAuth.get("nonce");
-        String uri = "/test/";
-
-        String responseDigest = computeDigest("/test/", nonce, "", "", "myUser", "myPassword", "MD5", realm, "", "GET");
-
-        // create response with headers
-        HttpGet response2 = new HttpGet("http://localhost:8080/test/");
-        response2.setHeader("Authorization", "Digest " +
-                "username=" + "\"myUser\",\n" +
-                "realm=\"" + realm + "\",\n" +
-                "nonce=\"" + nonce + "\",\n" +
-                "uri=\"" + uri + "\",\n" +
-                "algorithm=\"" + "MD5" + "\",\n" +
-                "response=\"" + responseDigest +
-                "\"");
-
-        // try to send a response to the server that did not send a challenge which will result in 401 if nonce manager not persisted
-        response2.setURI(new URI("http://localhost:8630/test/"));
-        HttpResponse chc2 = httpclient2.execute(response2);
-        Assert.assertEquals(200, chc2.getStatusLine().getStatusCode()); // passes on the other server
-        response2.releaseConnection();
-
-        // try to send a response to the server that not send a challenge which will result in 200
-        response2.setURI(new URI("http://localhost:8080/test/"));
-        HttpResponse chc = httpclient2.execute(response2);
-        Assert.assertEquals(401, chc.getStatusLine().getStatusCode()); // 401 is returned because the same nonce cannot be used twice
-        // take the nonce from the 401 and send it to server 1
-        Map<String, String> wwwAuth2 = Arrays
-                .stream(chc.getHeaders("WWW-Authenticate")[0]
-                        .getElements())
-                .collect(Collectors.toMap(HeaderElement::getName, HeaderElement::getValue));
-        realm = wwwAuth2.get("Digest realm");
-        nonce = wwwAuth2.get("nonce");
-        uri = "/test/";
-        String responseDigest3 = computeDigest("/test/", nonce, "", "", "myUser", "myPassword", "MD5", realm, "", "GET");
-
-        response2.releaseConnection();
-        HttpGet response3 = new HttpGet("http://localhost:8630/test/");
-        response3.setHeader("Authorization", "Digest " +
-                "username=" + "\"myUser\",\n" +
-                "realm=\"" + realm + "\",\n" +
-                "nonce=\"" + nonce + "\",\n" +
-                "uri=\"" + uri + "\",\n" +
-                "algorithm=\"" + "MD5" + "\",\n" +
-                "response=\"" + responseDigest3 +
-                "\"");
-
-        response3.setURI(new URI("http://localhost:8630/test/"));
-        HttpResponse chc3 = httpclient2.execute(response3);
-        Assert.assertEquals(200, chc3.getStatusLine().getStatusCode()); // passes on the other server
-        response3.releaseConnection();
-    }
-
-    private String computeDigest(String uri, String nonce, String cnonce, String nc, String username, String password, String algorithm, String realm, String qop, String method) throws NoSuchAlgorithmException, NoSuchAlgorithmException {
+    private String computeDigest(String uri, String nonce, String username, String password, String algorithm, String realm, String method) throws NoSuchAlgorithmException, NoSuchAlgorithmException {
         String A1, HashA1, A2, HashA2;
         MessageDigest md = MessageDigest.getInstance(algorithm);
         A1 = username + ":" + realm + ":" + password;
@@ -241,7 +246,6 @@ public class DigestDomainTestCase {
     }
 
     public String getMD5(String value) {
-        return DigestUtils.md5Hex(value).toString();
+        return DigestUtils.md5Hex(value);
     }
-
 }

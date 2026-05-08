@@ -38,6 +38,21 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>org.wildfly.security.hashicorp.vault</groupId>
+            <artifactId>wildfly-elytron-hashicorp-vault</artifactId>
+            <version>${version.org.wildfly.security.hashicorp.vault}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.jopenlibs</groupId>
+            <artifactId>vault-java-driver</artifactId>
+            <version>6.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.security.vault</groupId>
+            <artifactId>wildfly-vault-subsystem</artifactId>
+            <version>${version.org.wildfly.security.vault}</version>
+        </dependency>
 
 
 

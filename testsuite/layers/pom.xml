@@ -1521,6 +1521,34 @@
                                 </configuration>
                             </execution>
                             <execution>
+                                <id>hashicorp-vault-provisioning</id>
+                                <goals>
+                                    <goal>provision</goal>
+                                </goals>
+                                <phase>${provisioning.phase}</phase>
+                                <configuration>
+                                    <install-dir>${layers.install.dir}/hashicorp-vault</install-dir>
+                                    <feature-packs>
+                                        <feature-pack>
+                                            <groupId>${ee.maven.groupId}</groupId>
+                                            <artifactId>${ee.feature.pack.artifactId}</artifactId>
+                                            <version>${ee.maven.version}</version>
+                                            <inherit-configs>false</inherit-configs>
+                                            <inherit-packages>false</inherit-packages>
+                                        </feature-pack>
+                                    </feature-packs>
+                                    <configurations>
+                                        <config>
+                                            <model>standalone</model>
+                                            <name>standalone.xml</name>
+                                            <layers>
+                                                <layer>hashicorp-vault</layer>
+                                            </layers>
+                                        </config>
+                                    </configurations>
+                                </configuration>
+                            </execution>
+                            <execution>
                                 <id>jaxrs-provisioning</id>
                                 <goals>
                                     <goal>provision</goal>
@@ -2166,6 +2194,7 @@
                                                 <layer>h2-datasource</layer>
                                                 <layer>h2-default-datasource</layer>
                                                 <layer>h2-driver</layer>
+                                                <layer>hashicorp-vault</layer>
                                                 <layer>iiop-openjdk</layer>
                                                 <layer>infinispan</layer>
                                                 <layer>io</layer>
@@ -2256,6 +2285,7 @@
                                                 <layer>h2-datasource</layer>
                                                 <layer>h2-default-datasource</layer>
                                                 <layer>h2-driver</layer>
+                                                <layer>hashicorp-vault</layer>
                                                 <layer>iiop-openjdk</layer>
                                                 <layer>infinispan</layer>
                                                 <layer>io</layer>
@@ -2380,6 +2410,7 @@
                                                 <layer>h2-datasource</layer>
                                                 <layer>h2-default-datasource</layer>
                                                 <layer>h2-driver</layer>
+                                                <layer>hashicorp-vault</layer>
                                                 <layer>health</layer>
                                                 <layer>iiop-openjdk</layer>
                                                 <layer>infinispan</layer>
@@ -2470,6 +2501,7 @@
                                                 <layer>h2-datasource</layer>
                                                 <layer>h2-default-datasource</layer>
                                                 <layer>h2-driver</layer>
+                                                <layer>hashicorp-vault</layer>
                                                 <layer>health</layer>
                                                 <layer>iiop-openjdk</layer>
                                                 <layer>infinispan</layer>

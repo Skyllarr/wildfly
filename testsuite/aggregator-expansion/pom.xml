@@ -50,6 +50,7 @@
             <modules>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
                 <module>../integration/manualmode-expansion</module>
             </modules>
         </profile>
@@ -61,6 +62,7 @@
                 <module>../integration/manualmode-expansion</module>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
             </modules>
         </profile>
 
@@ -77,6 +79,7 @@
             <modules>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
                 <module>../layers-expansion</module>
             </modules>
         </profile>
@@ -88,6 +91,7 @@
             <modules>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
                 <module>../integration/manualmode-expansion</module>
             </modules>
         </profile>
@@ -109,6 +113,7 @@
                 <module>../integration/basic</module>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
                 <module>../integration/clustering</module>
                 <module>../integration/elytron-oidc-client</module>
             </modules>
@@ -121,6 +126,7 @@
             <modules>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
             </modules>
         </profile>
 
@@ -135,6 +141,7 @@
             <modules>
                 <module>../integration/expansion</module>
                 <module>../integration/microprofile-tck</module>
+                <module>../integration/hashicorp-vault</module>
             </modules>
         </profile>
 

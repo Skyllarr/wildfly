@@ -101,6 +101,25 @@
                             <outputDirectory>${basedir}/target/unpacked-wildfly-core-galleon-resources</outputDirectory>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>unpack-hashicorp-vault-feature-pack-resources</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.wildfly.security.vault</groupId>
+                                    <artifactId>wildfly-vault-feature-pack</artifactId>
+                                    <type>zip</type>
+                                </artifactItem>
+                            </artifactItems>
+                            <includes>feature_groups/hashicorp-vault.xml,features/subsystem.hashicorp-vault/**,features/subsystem.hashicorp-vault.credential-store/**,features/subsystem.hashicorp-vault.credential-store.credential-reference/**,layers/standalone/hashicorp-vault/**,resources/wildfly/**,modules/system/layers/base/io/github/jopenlibs/vault-java-driver/main/module.xml,modules/system/layers/base/org/wildfly/extension/hashicorp-vault/main/module.xml,modules/system/layers/base/org/wildfly/security/elytron-hashicorp-vault/main/module.xml</includes>
+                            <excludes>**/pom.xml,META-INF,META-INF/**</excludes>
+                            <outputDirectory>${basedir}/target/unpacked-hashicorp-vault-galleon-resources</outputDirectory>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>
@@ -119,6 +138,23 @@
                             <resources>
                                 <resource>
                                     <directory>${basedir}/target/unpacked-wildfly-core-galleon-resources</directory>
+                                </resource>
+                            </resources>
+                            <overwrite>true</overwrite>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-unpacked-hashicorp-vault-galleon-resources</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${basedir}/target/resources</outputDirectory>
+                            <escapeString>\</escapeString>
+                            <resources>
+                                <resource>
+                                    <directory>${basedir}/target/unpacked-hashicorp-vault-galleon-resources</directory>
                                 </resource>
                             </resources>
                             <overwrite>true</overwrite>
@@ -330,6 +366,24 @@
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.security.hashicorp.vault</groupId>
+            <artifactId>wildfly-elytron-hashicorp-vault</artifactId>
+            <version>${version.org.wildfly.security.hashicorp.vault}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.jopenlibs</groupId>
+            <artifactId>vault-java-driver</artifactId>
+            <version>6.2.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.security.vault</groupId>
+            <artifactId>wildfly-vault-subsystem</artifactId>
+            <version>${version.org.wildfly.security.vault}</version>
             <scope>provided</scope>
         </dependency>
 
